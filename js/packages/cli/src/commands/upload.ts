@@ -88,14 +88,13 @@ export async function uploadV2({
     cacheContent.program = {};
   }
 
-  let existingInCache = [];
   if (!cacheContent.items) {
     cacheContent.items = {};
-  } else {
-    existingInCache = Object.keys(cacheContent.items);
   }
-  const dedupedAssetKeys = getAssetKeysNeedingUpload(existingInCache, files);
+
+  const dedupedAssetKeys = getAssetKeysNeedingUpload(cacheContent.items, files);
   const SIZE = dedupedAssetKeys.length;
+  console.log('Size', SIZE, dedupedAssetKeys[0]);
   let candyMachine = cacheContent.program.candyMachine
     ? new PublicKey(cacheContent.program.candyMachine)
     : undefined;
@@ -206,7 +205,7 @@ export async function uploadV2({
       chunks(Array.from(Array(SIZE).keys()), batchSize || 50).map(
         async allIndexesInSlice => {
           for (let i = 0; i < allIndexesInSlice.length; i++) {
-            const assetKey = dedupedAssetKeys[i];
+            const assetKey = dedupedAssetKeys[allIndexesInSlice[i]];
             const image = path.join(
               dirname,
               `${assetKey.index}${assetKey.mediaExt}`,
@@ -218,12 +217,15 @@ export async function uploadV2({
                 : `${assetKey.index}.json`,
             );
             const manifestBuffer = Buffer.from(JSON.stringify(manifest));
-            if (i >= lastPrinted + tick || i === 0) {
+            if (
+              allIndexesInSlice[i] >= lastPrinted + tick ||
+              allIndexesInSlice[i] === 0
+            ) {
               lastPrinted = i;
-              log.info(`Processing asset: ${assetKey}`);
+              log.info(`Processing asset: ${allIndexesInSlice[i]}`);
             }
 
-            if (i === 0 && !cacheContent.program.uuid) {
+            if (allIndexesInSlice[i] === 0 && !cacheContent.program.uuid) {
               try {
                 const remainingAccounts = [];
 
@@ -281,9 +283,12 @@ export async function uploadV2({
               }
             }
 
-            if (i >= lastPrinted + tick || i === 0) {
-              lastPrinted = i;
-              log.info(`Processing asset: ${assetKey}`);
+            if (
+              allIndexesInSlice[i] >= lastPrinted + tick ||
+              allIndexesInSlice[i] === 0
+            ) {
+              lastPrinted = allIndexesInSlice[i];
+              log.info(`Processing asset: ${allIndexesInSlice[i]}`);
             }
 
             let link, imageLink;
@@ -312,11 +317,11 @@ export async function uploadV2({
                     image,
                     manifestBuffer,
                     manifest,
-                    i,
+                    assetKey.index,
                   );
               }
               if (link && imageLink) {
-                log.debug('Updating cache for ', assetKey);
+                log.debug('Updating cache for ', allIndexesInSlice[i]);
                 cacheContent.items[assetKey.index] = {
                   link,
                   imageLink,
@@ -327,7 +332,7 @@ export async function uploadV2({
               }
             } catch (err) {
               log.error(`Error uploading file ${assetKey}`, err);
-              throw err;
+              i--;
             }
           }
         },
@@ -383,8 +388,7 @@ export async function uploadV2({
                   saveCache(cacheName, env, cacheContent);
                 } catch (e) {
                   log.error(
-                    `saving config line ${ind}-${
-                      keys[indexes[indexes.length - 1]]
+                    `saving config line ${ind}-${keys[indexes[indexes.length - 1]]
                     } failed`,
                     e,
                   );
@@ -435,6 +439,7 @@ type Manifest = {
     }>;
   };
 };
+
 /**
  * From the Cache object & a list of file paths, return a list of asset keys
  * (filenames without extension nor path) that should be uploaded, sorted numerically in ascending order.
@@ -457,6 +462,7 @@ function getAssetKeysNeedingUpload(
     .reduce((acc, assetKey) => {
       const ext = path.extname(assetKey);
       const key = path.basename(assetKey, ext);
+
       if (!items[key]?.link && !keyMap[key]) {
         keyMap[key] = true;
         acc.push({ mediaExt: ext, index: key });
@@ -467,17 +473,19 @@ function getAssetKeysNeedingUpload(
 }
 
 /**
- * From the Cache object & a list of file paths, return a list of asset keys
- * (filenames without extension nor path) that should be uploaded.
- * Assets which should be uploaded either are not present in the Cache object,
- * or do not truthy value for the `link` property.
+ * Returns a Manifest from a path and an assetKey
+ * Replaces image.ext => index.ext
  */
 function getAssetManifest(dirname: string, assetKey: string): Manifest {
+  const assetIndex = assetKey.includes('.json') ? assetKey.substring(0, assetKey.length - 5) : assetKey;
   const manifestPath = path.join(
     dirname,
-    assetKey.includes('json') ? assetKey : `${assetKey}.json`,
+    `${assetIndex}.json`,
   );
-  return JSON.parse(fs.readFileSync(manifestPath).toString());
+  const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath).toString());
+  manifest.image = manifest.image.replace('image', assetIndex);
+  manifest.properties.files[0].uri = manifest.properties.files[0].uri.replace('image', assetIndex);
+  return manifest;
 }
 
 /**
@@ -589,8 +597,7 @@ async function writeIndices({
                 saveCache(cacheName, env, cache);
               } catch (err) {
                 log.error(
-                  `Saving config line ${ind}-${
-                    keys[indexes[indexes.length - 1]]
+                  `Saving config line ${ind}-${keys[indexes[indexes.length - 1]]
                   } failed`,
                   err,
                 );
@@ -815,16 +822,16 @@ export async function upload({
     const config = cache.program.config
       ? new PublicKey(cache.program.config)
       : await initConfig(anchorProgram, walletKeyPair, {
-          totalNFTs,
-          mutable,
-          retainAuthority,
-          sellerFeeBasisPoints,
-          symbol,
-          creators,
-          env,
-          cache,
-          cacheName,
-        });
+        totalNFTs,
+        mutable,
+        retainAuthority,
+        sellerFeeBasisPoints,
+        symbol,
+        creators,
+        env,
+        cache,
+        cacheName,
+      });
 
     setAuthority(walletKeyPair.publicKey, cache, cacheName, env);
 
