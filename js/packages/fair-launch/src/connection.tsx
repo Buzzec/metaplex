@@ -162,6 +162,8 @@ export const sendTransactions = async (
       transaction.partialSign(...signers);
     }
 
+    console.log('Transaction: ', transaction);
+
     unsignedTxns.push(transaction);
   }
 
@@ -177,6 +179,7 @@ export const sendTransactions = async (
     instructionSet.length,
   );
   for (let i = 0; i < signedTxns.length; i++) {
+    console.log('Transaction after: ', signedTxns[i]);
     const signedTxnPromise = sendSignedTransaction({
       connection,
       signedTransaction: signedTxns[i],
@@ -339,7 +342,7 @@ export const getUnixTs = () => {
   return new Date().getTime() / 1000;
 };
 
-const DEFAULT_TIMEOUT = 15000;
+const DEFAULT_TIMEOUT = 60000;
 
 export async function sendSignedTransaction({
   signedTransaction,
@@ -353,13 +356,15 @@ export async function sendSignedTransaction({
   successMessage?: string;
   timeout?: number;
 }): Promise<{ txid: string; slot: number }> {
+  console.log('Transaction right before: ', signedTransaction);
   const rawTransaction = signedTransaction.serialize();
   const startTime = getUnixTs();
   let slot = 0;
+  console.log("deserialized: ", Transaction.from(rawTransaction));
   const txid: TransactionSignature = await connection.sendRawTransaction(
     rawTransaction,
     {
-      skipPreflight: true,
+      skipPreflight: false,
     },
   );
 

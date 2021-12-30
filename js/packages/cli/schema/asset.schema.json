@@ -1,0 +1,71 @@
+{
+  "title": "Candy Machine v2 Asset",
+  "definitions": {
+    "public_key": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{43}$"
+    }
+  },
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "symbol": {
+      "$comment": "Only first one matters",
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "properties": {
+      "type": "object",
+      "properties": {
+        "files":{
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uri": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "category": {
+          "type": "string"
+        },
+        "creators": {
+          "$comment": "Only first one matters",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "$ref": "#/definitions/public_key"
+              },
+              "share": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "seller_fee_basis_points": {
+          "$comment": "Only the first one matters, in hundredths of a percent",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    }
+  },
+  "required": []
+}
